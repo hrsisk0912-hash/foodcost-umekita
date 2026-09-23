@@ -184,7 +184,7 @@ body{font-family:var(--font);background:var(--paper);color:var(--ink);min-height
 <header class="app-header">
   <div class="logo">
     <div class="logo-badge">権兵衛</div>
-    <div><div class="logo-name" id="store-name">原価管理</div><div class="logo-sub">原価管理</div></div>
+    <div><div class="logo-name" id="store-name">原価管理</div><div class="logo-sub">炭火焼き居酒屋</div></div>
   </div>
   <div class="sync-wrap"><div class="sync-dot" id="sync-dot"></div><span id="sync-lbl">同期済み</span></div>
 </header>
@@ -195,6 +195,9 @@ body{font-family:var(--font);background:var(--paper);color:var(--ink);min-height
   <div id="tab-menu" class="tab active">
     <div class="pg-title">メニュー原価</div>
     <div class="pg-sub">商品ごとの理論原価・原価率を管理</div>
+    <div class="field" style="margin-bottom:12px">
+      <input class="input" id="menu-search" type="text" placeholder="🔍 商品名で検索" oninput="onMenuSearch(this.value)">
+    </div>
     <div class="seg">
       <button class="seg-btn active" onclick="switchSeg(this,'menuSeg','all',renderMenuList)">すべて</button>
       <button class="seg-btn" onclick="switchSeg(this,'menuSeg','food',renderMenuList)">フード</button>
@@ -215,6 +218,10 @@ body{font-family:var(--font);background:var(--paper);color:var(--ink);min-height
     <div class="pg-sub">単価を更新すると全メニューに自動反映</div>
 
     <button class="btn btn-s" style="margin-bottom:14px" onclick="openImportModal()">📥 Infomartから一括取込</button>
+
+    <div class="field" style="margin-bottom:12px">
+      <input class="input" id="ing-search" type="text" placeholder="🔍 食材名で検索（全部門から検索）" oninput="onIngSearch(this.value)">
+    </div>
 
     <div class="seg">
       <button class="seg-btn active" onclick="switchIngDept(this,'food')">食材</button>
@@ -409,6 +416,22 @@ body{font-family:var(--font);background:var(--paper);color:var(--ink);min-height
           <button class="btn btn-s btn-sm" onclick="importSelectAll(true)">全選択</button>
           <button class="btn btn-s btn-sm" onclick="importSelectAll(false)">全解除</button>
         </div>
+
+        <div class="import-row" style="background:var(--highlight);border-style:dashed">
+          <div class="import-row-main">
+            <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">✔チェック中の行に、部門・カテゴリを一括で設定</div>
+            <div class="import-row-selects" style="margin-bottom:8px">
+              <select id="imp-bulk-dept" onchange="onBulkDeptChange()">
+                <option value="food">食材</option>
+                <option value="drink">飲料</option>
+                <option value="misc">消耗品・その他</option>
+              </select>
+              <select id="imp-bulk-cat"></select>
+            </div>
+            <button type="button" class="btn btn-s btn-sm" style="width:100%" onclick="applyBulkCategory()">選択中の<span id="imp-bulk-target-count">0</span>件に一括適用</button>
+          </div>
+        </div>
+
         <div id="imp-rows"></div>
       </div>
 
@@ -446,7 +469,7 @@ body{font-family:var(--font);background:var(--paper);color:var(--ink);min-height
 // ============================================================
 // CONFIG
 // ============================================================
-const API = 'https://script.google.com/macros/s/AKfycbxXp3cMMDXIgv-cuANo-v_AIgtI5-GOTegZRROuK7a4Al9s0YD5EM2-u7iy5820eK7m/exec';
+const API = 'YOUR_GAS_DEPLOY_URL_HERE';
 
 // ============================================================
 // STATE
@@ -455,6 +478,7 @@ const S = {
   ings:[], menus:[], recipes:[], cfg:{},
   menuId:null, ingId:null,
   menuSeg:'all', ingDept:'food', foodCat:'all', drinkCat:'all', miscCat:'all', catSeg:'food',
+  menuSearch:'', ingSearch:'',
   cats:{
     food: [
       {v:'chicken',l:'鶏肉'},
@@ -566,7 +590,14 @@ function switchSeg(el,key,val,cb){
 function switchIngDept(el,dept){
   el.closest('.seg').querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('active'));
   el.classList.add('active'); S.ingDept=dept;
-  ['food','drink','misc'].forEach(d=>document.getElementById('sec-'+d).style.display=d===dept?'':'none');
+  if(!S.ingSearch) ['food','drink','misc'].forEach(d=>document.getElementById('sec-'+d).style.display=d===dept?'':'none');
+  renderIngList();
+}
+function onIngSearch(v){
+  S.ingSearch = v.trim();
+  const searching = !!S.ingSearch;
+  // 検索中は部門タブに関わらず食材・飲料・消耗品すべてのセクションを表示して横断検索する
+  ['food','drink','misc'].forEach(d=>document.getElementById('sec-'+d).style.display = searching ? '' : (d===S.ingDept?'':'none'));
   renderIngList();
 }
 
@@ -575,11 +606,18 @@ function switchIngDept(el,dept){
 // ============================================================
 function renderAll(){renderMenuList();buildCatSegs();renderIngList();}
 
+function onMenuSearch(v){
+  S.menuSearch = v.trim();
+  renderMenuList();
+}
+
 function renderMenuList(){
-  const list=S.menus.filter(m=>S.menuSeg==='all'||m.cat===S.menuSeg);
+  const q=(S.menuSearch||'').toLowerCase();
+  // 検索中はカテゴリ（すべて/フード/ドリンク）の絞込みを無視して全体から名前一致を探す
+  const list=S.menus.filter(m=>(q||S.menuSeg==='all'||m.cat===S.menuSeg)&&(!q||m.name.toLowerCase().includes(q)));
   document.getElementById('menu-count').textContent=list.length+'件';
   const el=document.getElementById('menu-list');
-  if(!list.length){el.innerHTML=empty('🍢','商品がまだありません','右下の ＋ で追加');return;}
+  if(!list.length){el.innerHTML=q?empty('🔍','見つかりませんでした','別のキーワードで検索してください'):empty('🍢','商品がまだありません','右下の ＋ で追加');return;}
   el.innerHTML=list.map(m=>{
     const r=m.price>0&&m.calcCost>0?m.calcCost/m.price:null;
     return`<div class="list-item" onclick="editMenu('${m.id}')">
@@ -604,15 +642,21 @@ function buildSeg(id,key,cats){
 }
 
 function renderIngList(){
-  renderIngSec('食材','list-food','cnt-food',i=>i.dept==='食材'&&(S.foodCat==='all'||i.cat===S.foodCat));
-  renderIngSec('飲料','list-drink','cnt-drink',i=>i.dept==='飲料'&&(S.drinkCat==='all'||i.cat===S.drinkCat));
-  renderIngSec('消耗品・その他','list-misc','cnt-misc',i=>i.dept==='消耗品・その他'&&(S.miscCat==='all'||i.cat===S.miscCat));
+  const q=(S.ingSearch||'').toLowerCase();
+  // 検索中はカテゴリの絞込みを無視して名前一致のみで横断検索する
+  const foodCatOk=i=>q||S.foodCat==='all'||i.cat===S.foodCat;
+  const drinkCatOk=i=>q||S.drinkCat==='all'||i.cat===S.drinkCat;
+  const miscCatOk=i=>q||S.miscCat==='all'||i.cat===S.miscCat;
+  const nameOk=i=>!q||i.name.toLowerCase().includes(q);
+  renderIngSec('食材','list-food','cnt-food',i=>i.dept==='食材'&&foodCatOk(i)&&nameOk(i),q);
+  renderIngSec('飲料','list-drink','cnt-drink',i=>i.dept==='飲料'&&drinkCatOk(i)&&nameOk(i),q);
+  renderIngSec('消耗品・その他','list-misc','cnt-misc',i=>i.dept==='消耗品・その他'&&miscCatOk(i)&&nameOk(i),q);
 }
-function renderIngSec(dept,listId,cntId,fn){
+function renderIngSec(dept,listId,cntId,fn,q){
   const list=S.ings.filter(fn);
   document.getElementById(cntId).textContent=list.length+'件';
   const el=document.getElementById(listId);
-  if(!list.length){el.innerHTML=empty('🗂️','まだありません','右下の ＋ で追加、またはInfomart取込');return;}
+  if(!list.length){el.innerHTML=q?empty('🔍','見つかりませんでした','別のキーワードで検索してください'):empty('🗂️','まだありません','右下の ＋ で追加、またはInfomart取込');return;}
   el.innerHTML=list.map(i=>{
     const up=i.price>0&&i.prevPrice>0&&i.price>i.prevPrice;
     const dn=i.price>0&&i.prevPrice>0&&i.price<i.prevPrice;
@@ -1057,6 +1101,27 @@ function resetImportModal(){
   document.getElementById('imp-footer').style.display='none';
   document.getElementById('import-file-input').value='';
   S.importParsed=[];
+  document.getElementById('imp-bulk-dept').value='food';
+  onBulkDeptChange();
+}
+
+// 一括カテゴリ設定：部門を変えたらカテゴリの選択肢を再構築
+function onBulkDeptChange(){
+  const dept=document.getElementById('imp-bulk-dept').value;
+  const cats=S.cats[dept]||[];
+  document.getElementById('imp-bulk-cat').innerHTML=cats.map(c=>`<option value="${c.v}">${c.l}</option>`).join('');
+}
+
+// ✔チェック中（取込対象）の行すべてに、選んだ部門・カテゴリを一括適用する
+function applyBulkCategory(){
+  const dept=document.getElementById('imp-bulk-dept').value;
+  const cat=document.getElementById('imp-bulk-cat').value;
+  const targets=S.importParsed.filter(i=>i.checked);
+  if(!targets.length){ toast('❌ 対象となるチェック済みの行がありません'); return; }
+  targets.forEach(i=>{ i.dept=dept; i.cat=cat; i.flagged=false; i.flagReason=''; });
+  renderImportPreview();
+  const catL=(S.cats[dept]||[]).find(c=>c.v===cat)?.l||cat;
+  toast(`✅ ${targets.length}件に「${catL}」を一括適用しました`);
 }
 
 // キーワードベースの部門・カテゴリ自動判定（あくまで初期提案。プレビューで編集可能）
@@ -1222,7 +1287,10 @@ function importSelectAll(v){
   renderImportPreview();
 }
 function updateImportSelectedCount(){
-  document.getElementById('imp-selected-count').textContent = S.importParsed.filter(i=>i.checked).length;
+  const n = S.importParsed.filter(i=>i.checked).length;
+  document.getElementById('imp-selected-count').textContent = n;
+  const bulkEl = document.getElementById('imp-bulk-target-count');
+  if (bulkEl) bulkEl.textContent = n;
 }
 
 async function confirmImport(){
