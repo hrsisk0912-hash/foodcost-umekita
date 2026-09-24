@@ -282,11 +282,104 @@ body{font-family:var(--font);background:var(--paper);color:var(--ink);min-height
     <button class="btn btn-s" onclick="loadAll()">🔄 データを再読み込み</button>
   </div>
 
+  <!-- ===== SAKE TAB（日本酒原価管理） ===== -->
+  <div id="tab-sake" class="tab">
+    <div class="pg-title">日本酒原価管理</div>
+    <div class="pg-sub">日曜日本酒飲み放題・単品の原価と原価率を管理</div>
+
+    <div class="card" id="sake-not-configured" style="display:none">
+      <div class="card-body">
+        <div class="sec-label">未設定</div>
+        <div style="font-size:13px;color:var(--muted);line-height:1.7">
+          このタブを使うには、日本酒原価管理用スプレッドシートのAppsScriptを「ウェブアプリ」としてデプロイし、
+          発行されたURLをこのファイルの <code>SAKE_API</code> に設定してください。
+        </div>
+      </div>
+    </div>
+
+    <div id="sake-body">
+      <div class="seg">
+        <button class="seg-btn active" onclick="switchSakeSeg(this,'master')">銘柄マスタ</button>
+        <button class="seg-btn" onclick="switchSakeSeg(this,'log')">原価履歴</button>
+        <button class="seg-btn" onclick="switchSakeSeg(this,'sim')">交差原価</button>
+        <button class="seg-btn" onclick="switchSakeSeg(this,'import')">実績取込</button>
+      </div>
+
+      <!-- ---- 銘柄マスタ ---- -->
+      <div id="sake-sec-master">
+        <div class="card">
+          <div class="card-body" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <div style="font-size:13px;color:var(--muted)">飲み放題単価：<b id="sake-cfg-price" style="color:var(--ink)">—</b>　目標原価率（飲み放題）：<b id="sake-cfg-rate-n" style="color:var(--ink)">—</b>　目標原価率（単品）：<b id="sake-cfg-rate-t" style="color:var(--ink)">—</b></div>
+            <button class="btn btn-g btn-sm" onclick="openSakeCfgModal()">設定を編集</button>
+          </div>
+        </div>
+        <div class="seg">
+          <button class="seg-btn active" onclick="switchSeg(this,'sakeStatusFilter','all',renderSakeMaster)">すべて</button>
+          <button class="seg-btn" onclick="switchSeg(this,'sakeStatusFilter','採用中',renderSakeMaster)">採用中</button>
+          <button class="seg-btn" onclick="switchSeg(this,'sakeStatusFilter','終了',renderSakeMaster)">終了</button>
+        </div>
+        <div class="card">
+          <div class="card-hdr"><div class="card-title">銘柄一覧 <span class="badge" id="sake-count">0件</span></div></div>
+          <div id="sake-list"></div>
+        </div>
+      </div>
+
+      <!-- ---- 原価履歴ログ ---- -->
+      <div id="sake-sec-log" style="display:none">
+        <div class="card">
+          <div class="card-hdr"><div class="card-title">原価改定ログ <span class="badge" id="sake-log-count">0件</span></div></div>
+          <div id="sake-log-list"></div>
+        </div>
+      </div>
+
+      <!-- ---- 交差原価シミュレーター ---- -->
+      <div id="sake-sec-sim" style="display:none">
+        <div class="card">
+          <div class="card-hdr"><div class="card-title">① 飲み放題ライン 原価バランス</div></div>
+          <div class="card-body">
+            <div id="sim-nomi-rows"></div>
+            <button class="btn btn-s btn-sm" style="margin-top:6px" onclick="addSimRow('nomi')">＋ 銘柄を追加</button>
+            <div class="divider"></div>
+            <div class="sum-row"><span class="sum-lbl">想定比率合計</span><span class="sum-val" id="sim-nomi-ratio">0%</span></div>
+            <div class="sum-row"><span class="sum-lbl">加重平均原価率</span><span class="sum-val sv-accent" id="sim-nomi-wavg">—</span></div>
+            <div class="sum-row"><span class="sum-lbl">目標との差</span><span class="sum-val" id="sim-nomi-diff">—</span></div>
+            <div class="sum-row"><span class="sum-lbl">損益分岐 提供合数の目安</span><span class="sum-val" id="sim-nomi-be">—</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-hdr"><div class="card-title">② 単品ライン 原価バランス</div></div>
+          <div class="card-body">
+            <div id="sim-tan-rows"></div>
+            <button class="btn btn-s btn-sm" style="margin-top:6px" onclick="addSimRow('tan')">＋ 銘柄を追加</button>
+          </div>
+        </div>
+        <button class="btn btn-p" onclick="saveSimConfig()">この構成を保存</button>
+      </div>
+
+      <!-- ---- 実績取込（単品） ---- -->
+      <div id="sake-sec-import" style="display:none">
+        <div class="card">
+          <div class="card-body">
+            <div class="sec-label">POS「ABC分析」データを貼り付け</div>
+            <div style="font-size:12px;color:var(--muted);margin-bottom:8px">商品CD／商品名／販売単価／原価／原価率／販売数量／売上金額／原価金額／粗利金額／売上構成比／累計構成比／粗利貢献率／ランクの順（タブまたはカンマ区切り）でそのまま貼り付けてください。</div>
+            <textarea id="sake-import-text" rows="6" class="input" style="min-height:120px;resize:vertical;font-family:monospace;font-size:12px" placeholder="ここにPOSデータを貼り付け"></textarea>
+            <button class="btn btn-p" style="margin-top:10px" onclick="runSakeImportCheck()">照合する</button>
+          </div>
+        </div>
+        <div class="card" id="sake-import-result-card" style="display:none">
+          <div class="card-hdr"><div class="card-title">照合結果 <span class="badge" id="sake-import-count">0件</span></div></div>
+          <div id="sake-import-result"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </main>
 
 <nav class="bottom-nav">
   <button class="nav-btn active" onclick="switchTab('menu',this)"><span class="ni">🍢</span>メニュー</button>
   <button class="nav-btn" onclick="switchTab('ing',this)"><span class="ni">🛒</span>食材マスタ</button>
+  <button class="nav-btn" onclick="switchTab('sake',this)"><span class="ni">🍶</span>日本酒</button>
   <button class="nav-btn" onclick="switchTab('cfg',this)"><span class="ni">⚙</span>設定</button>
 </nav>
 
@@ -463,6 +556,80 @@ body{font-family:var(--font);background:var(--paper);color:var(--ink);min-height
   </div>
 </div>
 
+<!-- ===== MODAL: 日本酒 銘柄 ===== -->
+<div class="overlay" id="sk-overlay" onclick="closeModal('sk-overlay')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="m-handle"></div>
+    <div class="m-hdr"><div class="m-title" id="sk-title">銘柄を追加</div><button class="btn btn-g btn-sm" onclick="closeModal('sk-overlay')">✕</button></div>
+    <div class="m-body">
+      <div class="row2">
+        <div class="field"><label class="f-label">商品CD<span class="req">*</span></label><input class="input" id="sk-cd" type="text" placeholder="例：3602"></div>
+        <div class="field"><label class="f-label">銘柄名<span class="req">*</span></label><input class="input" id="sk-name" type="text" placeholder="例：紀土"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label class="f-label">提供形態</label><input class="input" id="sk-form" type="text" placeholder="例：一合"></div>
+        <div class="field"><label class="f-label">産地</label><input class="input" id="sk-origin" type="text" placeholder="例：和歌山県"></div>
+      </div>
+      <div class="row2">
+        <div class="field"><label class="f-label">季節区分</label>
+          <select class="select" id="sk-season"><option value="春">春</option><option value="夏">夏</option><option value="秋">秋</option><option value="冬">冬</option><option value="通年">通年</option></select>
+        </div>
+        <div class="field"><label class="f-label">状態</label>
+          <select class="select" id="sk-status"><option value="採用中">採用中</option><option value="終了">終了</option></select>
+        </div>
+      </div>
+      <div class="row2">
+        <div class="field"><label class="f-label">導入開始日</label><input class="input" id="sk-start" type="date"></div>
+        <div class="field" style="display:flex;align-items:flex-end;padding-bottom:12px">
+          <label style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600"><input type="checkbox" id="sk-nomi" style="width:20px;height:20px;accent-color:var(--accent)">飲み放題対象</label>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="sec-label">原価</div>
+      <div class="row2">
+        <div class="field"><label class="f-label">仕入単価（税抜）<span class="req">*</span></label><input class="input input-num" id="sk-purchase" type="number" inputmode="numeric" placeholder="0" oninput="recalcSakeModal()"></div>
+        <div class="field" style="display:flex;flex-direction:column;gap:6px">
+          <label class="f-label" style="margin-bottom:0">送料</label>
+          <label style="display:flex;align-items:center;gap:8px;font-size:14px"><input type="checkbox" id="sk-hasship" style="width:20px;height:20px;accent-color:var(--accent)" onchange="recalcSakeModal()">あり</label>
+          <input class="input input-num" id="sk-shipcost" type="number" inputmode="numeric" placeholder="送料単価" oninput="recalcSakeModal()">
+        </div>
+      </div>
+      <div class="field"><label class="f-label">単品売価（税抜）</label><input class="input input-num" id="sk-tanprice" type="number" inputmode="numeric" placeholder="0" oninput="recalcSakeModal()"></div>
+      <div class="field"><label class="f-label">備考</label><input class="input" id="sk-note" type="text" placeholder="任意"></div>
+      <div class="divider"></div>
+      <div class="sec-label">計算結果</div>
+      <div class="sum-row"><span class="sum-lbl">原価</span><span class="sum-val sv-accent" id="sk-calc-cost">¥ —</span></div>
+      <div class="sum-row"><span class="sum-lbl">飲み放題原価率</span><span class="sum-val" id="sk-calc-nomi">— %</span></div>
+      <div class="sum-row"><span class="sum-lbl">単品原価率</span><span class="sum-val" id="sk-calc-tan">— %</span></div>
+      <div id="sk-reason-wrap" style="display:none">
+        <div class="divider"></div>
+        <div class="field"><label class="f-label">原価変更理由</label><input class="input" id="sk-reason" type="text" placeholder="例：季節銘柄切替に伴う仕入先変更"></div>
+        <div style="font-size:12px;color:var(--muted)">仕入単価または送料が変わると、自動で原価履歴ログに1行追記されます。</div>
+      </div>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-p" id="sk-save" onclick="saveSakeBrand()">保存する</button>
+      <button class="btn btn-d btn-sm" id="sk-del" onclick="deleteSakeBrand()" style="display:none">この銘柄を削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: 日本酒 設定 ===== -->
+<div class="overlay" id="skc-overlay" onclick="closeModal('skc-overlay')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="m-handle"></div>
+    <div class="m-hdr"><div class="m-title">日本酒 設定</div><button class="btn btn-g btn-sm" onclick="closeModal('skc-overlay')">✕</button></div>
+    <div class="m-body">
+      <div class="field"><label class="f-label">飲み放題単価（税抜）</label><input class="input input-num" id="skc-price" type="number" inputmode="numeric"></div>
+      <div class="row2">
+        <div class="field"><label class="f-label">目標原価率（飲み放題・%）</label><input class="input input-num" id="skc-rate-n" type="number" inputmode="numeric"></div>
+        <div class="field"><label class="f-label">目標原価率（単品・%）</label><input class="input input-num" id="skc-rate-t" type="number" inputmode="numeric"></div>
+      </div>
+    </div>
+    <div class="m-foot"><button class="btn btn-p" onclick="saveSakeCfg()">保存する</button></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -470,6 +637,9 @@ body{font-family:var(--font);background:var(--paper);color:var(--ink);min-height
 // CONFIG
 // ============================================================
 const API = 'https://script.google.com/macros/s/AKfycbxXp3cMMDXIgv-cuANo-v_AIgtI5-GOTegZRROuK7a4Al9s0YD5EM2-u7iy5820eK7m/exec';
+// 日本酒原価管理（umekita-sake-genka-kanri プロジェクト）のWebアプリURL。
+// Apps Scriptエディタで「デプロイ＞新しいデプロイ＞ウェブアプリ」して発行されたURLに差し替える。
+const SAKE_API = 'https://script.google.com/macros/s/AKfycby3JVdZITfCUzgpKvr-ix6LNSlz7J-nLk1W50nWM8QkTh2xtiltH-_OsZzbeFGL-Znj/exec';
 
 // ============================================================
 // STATE
@@ -527,6 +697,7 @@ async function loadAll(){
     applyCfg(); setSyncing('ok'); renderAll();
   }catch(e){setSyncing('error');toast('⚠ データ取得に失敗しました');console.error(e);}
   finally{showLoad(false);}
+  loadSakeAll(); // 日本酒データは別APIなので、失敗してもメイン画面には影響させない
 }
 
 // ============================================================
@@ -580,8 +751,11 @@ function switchTab(name,el){
   document.getElementById('tab-'+name).classList.add('active');
   el.classList.add('active');
   S.currentTab=name;
-  document.getElementById('fab').style.display=name==='cfg'?'none':'';
+  document.getElementById('fab').style.display=(name==='cfg'||name==='sake')?'none':'';
   if(name==='cfg') renderCatList();
+  if(name==='sake'){
+    document.getElementById('fab').style.display=(SK.seg==='master')?'':'none';
+  }
 }
 function switchSeg(el,key,val,cb){
   el.closest('.seg').querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('active'));
@@ -686,6 +860,7 @@ function renderCatList(){
 function openAddModal(){
   if(S.currentTab==='menu') openMenuModal(null);
   else if(S.currentTab==='ing') openIngModal(null);
+  else if(S.currentTab==='sake' && SK.seg==='master') openSakeModal(null);
 }
 
 // ============================================================
@@ -1324,6 +1499,350 @@ async function confirmImport(){
 function escapeHtml(str){
   if (str===null||str===undefined) return '';
   return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ============================================================
+// 日本酒原価管理（🍶日本酒タブ）
+// ============================================================
+const SK = {
+  brands:[], costLog:[], cfg:{}, sim:{nomi:[],tan:[]},
+  seg:'master', statusFilter:'all',
+  editCd:null, origCd:null, isNew:false,
+  simRowSeq:0,
+};
+
+const sakeApiGet  = p => fetch(SAKE_API+'?'+new URLSearchParams(p)).then(r=>r.json());
+const sakeApiPost = d => fetch(SAKE_API,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(d)}).then(r=>r.json());
+function sakeConfigured(){ return typeof SAKE_API==='string' && SAKE_API.indexOf('https://script.google.com')===0; }
+
+async function loadSakeAll(){
+  const configured = sakeConfigured();
+  document.getElementById('sake-not-configured').style.display = configured?'none':'';
+  document.getElementById('sake-body').style.display = configured?'':'none';
+  if(!configured) return;
+  try{
+    const d = await sakeApiGet({action:'getAll'});
+    if(d.error) throw new Error(d.error);
+    SK.brands = d.brands||[];
+    SK.costLog = d.costLog||[];
+    SK.cfg = d.config||{};
+    SK.sim = d.sim||{nomi:[],tan:[]};
+    renderSakeAll();
+  }catch(e){ console.error('sake load error', e); toast('⚠ 日本酒データの取得に失敗しました'); }
+}
+
+function renderSakeAll(){
+  applySakeCfgDisplay();
+  renderSakeMaster();
+  renderSakeLog();
+  buildSimRowsFromState();
+}
+
+function applySakeCfgDisplay(){
+  document.getElementById('sake-cfg-price').textContent = SK.cfg.nomihoudaiPrice ? yen(SK.cfg.nomihoudaiPrice) : '—';
+  document.getElementById('sake-cfg-rate-n').textContent = SK.cfg.targetRateNomi ? pct(SK.cfg.targetRateNomi) : '—';
+  document.getElementById('sake-cfg-rate-t').textContent = SK.cfg.targetRateTan ? pct(SK.cfg.targetRateTan) : '—';
+}
+
+// ---- セグメント切替 ----
+function switchSakeSeg(el, seg){
+  el.closest('.seg').querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  SK.seg = seg;
+  ['master','log','sim','import'].forEach(s=>{
+    document.getElementById('sake-sec-'+s).style.display = (s===seg)?'':'none';
+  });
+  document.getElementById('fab').style.display = (seg==='master')?'':'none';
+}
+
+function sakeRateClass(r, target){
+  if(r===null||r===undefined) return 'rb-none';
+  const t = target||0.30;
+  return r<=t ? 'rb-safe' : (r<=t+0.08 ? 'rb-warn' : 'rb-danger');
+}
+
+// ---- 銘柄マスタ ----
+function renderSakeMaster(){
+  const filterVal = S.sakeStatusFilter;
+  const list = SK.brands.filter(b => !filterVal || filterVal==='all' || b.status===filterVal);
+  document.getElementById('sake-count').textContent = list.length+'件';
+  const el = document.getElementById('sake-list');
+  if(!list.length){ el.innerHTML = empty('🍶','銘柄がまだありません','右下の ＋ で追加'); return; }
+  el.innerHTML = list.map(b=>{
+    const badges = [b.form, b.season].filter(Boolean).map(t=>`<span class="ct">${escapeHtml(t)}</span>`).join('');
+    const statusTag = b.status==='終了' ? '<span class="ct ct-misc">終了</span>' : '';
+    return `<div class="list-item" onclick="editSakeBrand('${escapeHtml(b.cd)}')">
+      <div class="li-main">
+        <div class="li-name">${b.forNomihoudai?'🍶 ':''}${escapeHtml(b.name)||'（名称未設定）'}</div>
+        <div class="li-sub">${badges}${statusTag} 原価 ${yen(b.cost)}</div>
+      </div>
+      <div class="li-right"><div class="rb ${sakeRateClass(b.tanRate, SK.cfg.targetRateTan)}">${pct(b.tanRate)}</div><div class="li-lbl">単品原価率</div></div>
+    </div>`;
+  }).join('');
+}
+
+function openSakeModal(cd){
+  SK.isNew = (cd===null);
+  SK.editCd = cd; SK.origCd = cd;
+  const b = cd ? SK.brands.find(x=>x.cd===cd) : null;
+  document.getElementById('sk-title').textContent = b ? '銘柄を編集' : '銘柄を追加';
+  document.getElementById('sk-cd').value = b ? b.cd : '';
+  document.getElementById('sk-name').value = b ? b.name : '';
+  document.getElementById('sk-form').value = b ? b.form : '';
+  document.getElementById('sk-origin').value = b ? b.origin : '';
+  document.getElementById('sk-season').value = b ? (b.season||'秋') : '秋';
+  document.getElementById('sk-status').value = b ? (b.status||'採用中') : '採用中';
+  document.getElementById('sk-start').value = b ? (b.startDate||'') : '';
+  document.getElementById('sk-nomi').checked = b ? !!b.forNomihoudai : false;
+  document.getElementById('sk-purchase').value = b ? b.purchasePrice : '';
+  document.getElementById('sk-hasship').checked = b ? !!b.hasShipping : false;
+  document.getElementById('sk-shipcost').value = b ? b.shippingCost : '';
+  document.getElementById('sk-tanprice').value = b ? b.tanpinPrice : '';
+  document.getElementById('sk-note').value = b ? b.note : '';
+  document.getElementById('sk-reason').value = '';
+  document.getElementById('sk-reason-wrap').style.display = b ? '' : 'none';
+  document.getElementById('sk-del').style.display = b ? '' : 'none';
+  recalcSakeModal();
+  document.getElementById('sk-overlay').classList.add('open');
+}
+function editSakeBrand(cd){ openSakeModal(cd); }
+
+function recalcSakeModal(){
+  const purchase = num(document.getElementById('sk-purchase').value);
+  const hasShip = document.getElementById('sk-hasship').checked;
+  const shipCost = num(document.getElementById('sk-shipcost').value);
+  const tanPrice = num(document.getElementById('sk-tanprice').value);
+  const cost = purchase + (hasShip?shipCost:0);
+  document.getElementById('sk-calc-cost').textContent = cost>0?yen(cost):'¥ —';
+  const nomiPrice = num(SK.cfg.nomihoudaiPrice);
+  const nomiRate = (nomiPrice>0 && cost>0) ? cost/nomiPrice : null;
+  const tanRate = (tanPrice>0 && cost>0) ? cost/tanPrice : null;
+  document.getElementById('sk-calc-nomi').textContent = pct(nomiRate);
+  document.getElementById('sk-calc-tan').textContent = pct(tanRate);
+}
+
+async function saveSakeBrand(){
+  const cd = document.getElementById('sk-cd').value.trim();
+  const name = document.getElementById('sk-name').value.trim();
+  if(!cd){ toast('❌ 商品CDを入力してください'); return; }
+  if(!name){ toast('❌ 銘柄名を入力してください'); return; }
+  const data = {
+    isNew: SK.isNew, origCd: SK.origCd, cd, name,
+    form: document.getElementById('sk-form').value.trim(),
+    origin: document.getElementById('sk-origin').value.trim(),
+    season: document.getElementById('sk-season').value,
+    status: document.getElementById('sk-status').value,
+    startDate: document.getElementById('sk-start').value,
+    forNomihoudai: document.getElementById('sk-nomi').checked,
+    purchasePrice: num(document.getElementById('sk-purchase').value),
+    hasShipping: document.getElementById('sk-hasship').checked,
+    shippingCost: num(document.getElementById('sk-shipcost').value),
+    tanpinPrice: num(document.getElementById('sk-tanprice').value),
+    note: document.getElementById('sk-note').value.trim(),
+    changeReason: document.getElementById('sk-reason').value.trim(),
+  };
+  document.getElementById('sk-save').disabled = true;
+  try{
+    const res = await sakeApiPost({action:'saveBrand', data});
+    if(res.error) throw new Error(res.error);
+    SK.brands = res.brands||[]; SK.costLog = res.costLog||[]; SK.cfg = res.config||SK.cfg; SK.sim = res.sim||SK.sim;
+    closeModal('sk-overlay'); toast('✅ 保存しました'); renderSakeAll();
+  }catch(e){ toast('⚠ 保存に失敗しました：'+e.message); console.error(e); }
+  finally{ document.getElementById('sk-save').disabled = false; }
+}
+
+async function deleteSakeBrand(){
+  if(!SK.editCd) return;
+  if(!confirm('この銘柄を削除しますか？（原価履歴ログは残ります）')) return;
+  try{
+    const res = await sakeApiPost({action:'deleteBrand', cd: SK.editCd});
+    if(res.error) throw new Error(res.error);
+    SK.brands = res.brands||[]; SK.costLog = res.costLog||[]; SK.cfg = res.config||SK.cfg; SK.sim = res.sim||SK.sim;
+    closeModal('sk-overlay'); toast('🗑 削除しました'); renderSakeAll();
+  }catch(e){ toast('⚠ 削除に失敗しました'); console.error(e); }
+}
+
+// ---- 設定 ----
+function openSakeCfgModal(){
+  document.getElementById('skc-price').value = SK.cfg.nomihoudaiPrice || '';
+  document.getElementById('skc-rate-n').value = SK.cfg.targetRateNomi ? Math.round(SK.cfg.targetRateNomi*100) : '';
+  document.getElementById('skc-rate-t').value = SK.cfg.targetRateTan ? Math.round(SK.cfg.targetRateTan*100) : '';
+  document.getElementById('skc-overlay').classList.add('open');
+}
+async function saveSakeCfg(){
+  const data = {
+    nomihoudaiPrice: num(document.getElementById('skc-price').value),
+    targetRateNomi: num(document.getElementById('skc-rate-n').value)/100,
+    targetRateTan: num(document.getElementById('skc-rate-t').value)/100,
+  };
+  try{
+    const res = await sakeApiPost({action:'saveConfig', data});
+    if(res.error) throw new Error(res.error);
+    SK.cfg = res.config||SK.cfg;
+    closeModal('skc-overlay'); toast('✅ 設定を保存しました'); applySakeCfgDisplay(); renderSakeMaster(); buildSimRowsFromState();
+  }catch(e){ toast('⚠ 保存に失敗しました'); console.error(e); }
+}
+
+// ---- 原価履歴ログ ----
+function renderSakeLog(){
+  const list = SK.costLog;
+  document.getElementById('sake-log-count').textContent = list.length+'件';
+  const el = document.getElementById('sake-log-list');
+  if(!list.length){ el.innerHTML = empty('📜','変更履歴はまだありません','銘柄の原価を変更すると自動で記録されます'); return; }
+  el.innerHTML = list.map(l=>{
+    const up = l.newCost>l.oldCost, dn = l.newCost<l.oldCost;
+    const diff = up?`<span class="pu">▲${yen(l.newCost-l.oldCost)}</span>`:dn?`<span class="pd">▼${yen(l.oldCost-l.newCost)}</span>`:'変動なし';
+    return `<div class="list-item" style="cursor:default">
+      <div class="li-main">
+        <div class="li-name">${escapeHtml(l.name)}</div>
+        <div class="li-sub">${escapeHtml(l.date)}　${yen(l.oldCost)} → ${yen(l.newCost)}　${diff}${l.reason?'　'+escapeHtml(l.reason):''}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ---- 交差原価シミュレーター ----
+function buildSimRowsFromState(){
+  document.getElementById('sim-nomi-rows').innerHTML = '';
+  document.getElementById('sim-tan-rows').innerHTML = '';
+  const nomi = (SK.sim.nomi && SK.sim.nomi.length) ? SK.sim.nomi : [{cd:'',ratio:0}];
+  const tan  = (SK.sim.tan  && SK.sim.tan.length)  ? SK.sim.tan  : [{cd:''}];
+  nomi.forEach(r=>addSimRow('nomi', r.cd, r.ratio));
+  tan.forEach(r=>addSimRow('tan', r.cd));
+  recalcSim();
+}
+
+function addSimRow(kind, presetCd, presetRatio){
+  SK.simRowSeq++;
+  const rid = 'sim-'+kind+'-'+SK.simRowSeq;
+  const container = document.getElementById(kind==='nomi'?'sim-nomi-rows':'sim-tan-rows');
+  const brandOpts = '<option value="">— 銘柄を選択 —</option>' +
+    SK.brands.filter(b=>b.status!=='終了').map(b=>`<option value="${escapeHtml(b.cd)}" ${presetCd===b.cd?'selected':''}>${escapeHtml(b.name)}</option>`).join('');
+  const div = document.createElement('div');
+  div.id = rid; div.className = 'ing-card';
+  div.innerHTML = kind==='nomi' ? `
+    <div class="row2" style="align-items:flex-end">
+      <div class="field" style="margin-bottom:0;flex:1"><label class="f-label" style="font-size:11px">銘柄</label><select class="select" id="${rid}-cd" onchange="recalcSim()">${brandOpts}</select></div>
+      <button class="btn btn-g btn-sm" style="color:var(--danger)" onclick="rmSimRow('${rid}')">✕</button>
+    </div>
+    <div class="row2" style="margin-top:8px">
+      <div class="field" style="margin-bottom:0"><label class="f-label" style="font-size:11px">想定提供比率（%）</label><input class="input input-num" id="${rid}-ratio" type="number" inputmode="numeric" value="${presetRatio?Math.round(presetRatio*100):''}" oninput="recalcSim()"></div>
+      <div class="field" style="margin-bottom:0"><label class="f-label" style="font-size:11px">原価率</label><input class="input input-ro" id="${rid}-rate" readonly placeholder="—"></div>
+    </div>` : `
+    <div class="row2" style="align-items:flex-end">
+      <div class="field" style="margin-bottom:0;flex:1"><label class="f-label" style="font-size:11px">銘柄</label><select class="select" id="${rid}-cd" onchange="recalcSim()">${brandOpts}</select></div>
+      <button class="btn btn-g btn-sm" style="color:var(--danger)" onclick="rmSimRow('${rid}')">✕</button>
+    </div>
+    <div class="row2" style="margin-top:8px">
+      <div class="field" style="margin-bottom:0"><label class="f-label" style="font-size:11px">単品原価率</label><input class="input input-ro" id="${rid}-rate" readonly placeholder="—"></div>
+      <div class="field" style="margin-bottom:0"><label class="f-label" style="font-size:11px">単品売価</label><input class="input input-ro" id="${rid}-price" readonly placeholder="—"></div>
+    </div>`;
+  container.appendChild(div);
+}
+function rmSimRow(rid){ const el=document.getElementById(rid); if(el) el.remove(); recalcSim(); }
+
+function recalcSim(){
+  let totalRatio=0, weightedCost=0;
+  document.querySelectorAll('[id^="sim-nomi-"][id$="-cd"]').forEach(sel=>{
+    const rid = sel.id.replace('-cd','');
+    const b = SK.brands.find(x=>x.cd===sel.value);
+    const ratio = num(document.getElementById(rid+'-ratio')?.value)/100;
+    const rateEl = document.getElementById(rid+'-rate');
+    if(b){
+      rateEl.value = pct(b.nomiRate);
+      if(ratio>0){ totalRatio+=ratio; weightedCost += (b.cost||0)*ratio; }
+    } else { rateEl.value=''; }
+  });
+  document.getElementById('sim-nomi-ratio').textContent = pct(totalRatio);
+  const nomiPrice = num(SK.cfg.nomihoudaiPrice);
+  const wavg = (nomiPrice>0 && weightedCost>0) ? weightedCost/nomiPrice : null;
+  document.getElementById('sim-nomi-wavg').textContent = pct(wavg);
+  const target = num(SK.cfg.targetRateNomi);
+  const diffEl = document.getElementById('sim-nomi-diff');
+  if(wavg!=null && target){
+    const diff = target - wavg;
+    diffEl.textContent = pct(diff);
+    diffEl.className = 'sum-val '+(diff>=0?'sv-safe':'sv-danger');
+  } else { diffEl.textContent='—'; diffEl.className='sum-val'; }
+  const beEl = document.getElementById('sim-nomi-be');
+  beEl.textContent = (weightedCost>0 && nomiPrice>0) ? (nomiPrice/weightedCost).toFixed(1)+'合' : '—';
+
+  document.querySelectorAll('[id^="sim-tan-"][id$="-cd"]').forEach(sel=>{
+    const rid = sel.id.replace('-cd','');
+    const b = SK.brands.find(x=>x.cd===sel.value);
+    const rateEl = document.getElementById(rid+'-rate');
+    const priceEl = document.getElementById(rid+'-price');
+    if(b){ rateEl.value = pct(b.tanRate); priceEl.value = b.tanpinPrice?yen(b.tanpinPrice):''; }
+    else { rateEl.value=''; priceEl.value=''; }
+  });
+}
+
+async function saveSimConfig(){
+  const nomi=[], tan=[];
+  document.querySelectorAll('[id^="sim-nomi-"][id$="-cd"]').forEach(sel=>{
+    const rid = sel.id.replace('-cd','');
+    const ratio = num(document.getElementById(rid+'-ratio')?.value)/100;
+    if(sel.value) nomi.push({cd:sel.value, ratio});
+  });
+  document.querySelectorAll('[id^="sim-tan-"][id$="-cd"]').forEach(sel=>{
+    if(sel.value) tan.push({cd:sel.value});
+  });
+  try{
+    const res = await sakeApiPost({action:'saveSimConfig', data:{nomi,tan}});
+    if(res.error) throw new Error(res.error);
+    SK.sim = {nomi,tan};
+    toast('✅ 構成を保存しました');
+  }catch(e){ toast('⚠ 保存に失敗しました'); console.error(e); }
+}
+
+// ---- 実績取込（単品） ----
+function parseSakeImportText(text){
+  const lines = text.split(/\r\n|\r|\n/).map(l=>l.trim()).filter(l=>l.length);
+  const rows=[];
+  lines.forEach(line=>{
+    const cols = line.indexOf('\t')>=0 ? line.split('\t') : line.split(',');
+    if(cols.length<5) return;
+    const cd = (cols[0]||'').trim();
+    const name = (cols[1]||'').trim();
+    if(!cd || cd==='商品CD') return; // ヘッダー行はスキップ
+    const rateRaw = parseFloat(String(cols[4]||'').replace('%','').replace(/,/g,''));
+    if(isNaN(rateRaw)) return;
+    rows.push({ cd, name, costRate: rateRaw/100 });
+  });
+  return rows;
+}
+
+async function runSakeImportCheck(){
+  const text = document.getElementById('sake-import-text').value;
+  const rows = parseSakeImportText(text);
+  if(!rows.length){ toast('❌ 貼り付けたデータを読み取れませんでした'); return; }
+  try{
+    const res = await sakeApiPost({action:'checkImport', rows});
+    if(res.error) throw new Error(res.error);
+    renderSakeImportResult(res.rows||[]);
+  }catch(e){ toast('⚠ 照合に失敗しました'); console.error(e); }
+}
+
+function skVerdictClass(v){
+  if(v==='許容範囲') return 'rb-safe';
+  if(v && v.indexOf('要確認')>=0) return 'rb-danger';
+  return 'rb-none';
+}
+
+function renderSakeImportResult(list){
+  document.getElementById('sake-import-result-card').style.display = list.length?'':'none';
+  document.getElementById('sake-import-count').textContent = list.length+'件';
+  const el = document.getElementById('sake-import-result');
+  el.innerHTML = list.map(r=>{
+    const diffTxt = (r.diff!==null && r.diff!==undefined) ? (r.diff>0?'+':'')+pct(r.diff) : '—';
+    return `<div class="list-item" style="cursor:default">
+      <div class="li-main">
+        <div class="li-name">${escapeHtml(r.name||r.cd)}</div>
+        <div class="li-sub">POS原価率 ${pct(r.posRate)}　マスタ ${pct(r.masterRate)}　差 ${diffTxt}</div>
+      </div>
+      <div class="li-right"><div class="rb ${skVerdictClass(r.verdict)}" style="min-width:auto">${escapeHtml(r.verdict)}</div></div>
+    </div>`;
+  }).join('');
 }
 
 // ============================================================
