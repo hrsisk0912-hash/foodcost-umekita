@@ -587,7 +587,13 @@ body{font-family:var(--font);background:var(--paper);color:var(--ink);min-height
       <div class="divider"></div>
       <div class="sec-label">原価</div>
       <div class="row2">
-        <div class="field"><label class="f-label">仕入単価（税抜）<span class="req">*</span></label><input class="input input-num" id="sk-purchase" type="number" inputmode="numeric" placeholder="0" oninput="recalcSakeModal()"></div>
+        <div class="field">
+          <label class="f-label">仕入単価（提供単位あたり・税抜）<span class="req">*</span></label>
+          <div style="display:flex;gap:8px">
+            <input class="input input-num" id="sk-purchase" type="number" inputmode="numeric" placeholder="0" oninput="recalcSakeModal()" style="flex:1">
+            <button type="button" class="btn btn-s btn-sm" style="width:auto;flex-shrink:0" onclick="openSakeCalc()">🧮 本単価から計算</button>
+          </div>
+        </div>
         <div class="field" style="display:flex;flex-direction:column;gap:6px">
           <label class="f-label" style="margin-bottom:0">送料</label>
           <label style="display:flex;align-items:center;gap:8px;font-size:14px"><input type="checkbox" id="sk-hasship" style="width:20px;height:20px;accent-color:var(--accent)" onchange="recalcSakeModal()">あり</label>
@@ -610,6 +616,38 @@ body{font-family:var(--font);background:var(--paper);color:var(--ink);min-height
     <div class="m-foot">
       <button class="btn btn-p" id="sk-save" onclick="saveSakeBrand()">保存する</button>
       <button class="btn btn-d btn-sm" id="sk-del" onclick="deleteSakeBrand()" style="display:none">この銘柄を削除</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: 日本酒 本単価から提供単位あたり原価を計算 ===== -->
+<div class="overlay" id="skcalc-overlay" onclick="closeModal('skcalc-overlay')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="m-handle"></div>
+    <div class="m-hdr"><div class="m-title">🧮 本単価から計算</div><button class="btn btn-g btn-sm" onclick="closeModal('skcalc-overlay')">✕</button></div>
+    <div class="m-body">
+      <div class="row2">
+        <div class="field"><label class="f-label">容量（ml）<span class="req">*</span></label><input class="input input-num" id="skcalc-vol" type="number" inputmode="numeric" placeholder="例：720" oninput="recalcSakeCalc()"></div>
+        <div class="field"><label class="f-label">仕入単価（1本・税抜）<span class="req">*</span></label><input class="input input-num" id="skcalc-price" type="number" inputmode="numeric" placeholder="例：3800" oninput="recalcSakeCalc()"></div>
+      </div>
+      <div class="field">
+        <label class="f-label">提供単位</label>
+        <select class="select" id="skcalc-unit" onchange="onSakeCalcUnitChange()">
+          <option value="180">一合（180ml）</option>
+          <option value="90">グラス（90cc）</option>
+          <option value="custom">カスタム</option>
+        </select>
+      </div>
+      <div class="field" id="skcalc-custom-wrap" style="display:none">
+        <label class="f-label">提供量（ml）</label>
+        <input class="input input-num" id="skcalc-custom-ml" type="number" inputmode="numeric" placeholder="例：120" oninput="recalcSakeCalc()">
+      </div>
+      <div class="divider"></div>
+      <div class="sum-row"><span class="sum-lbl">1mlあたり単価</span><span class="sum-val" id="skcalc-per-ml">—</span></div>
+      <div class="sum-row"><span class="sum-lbl">この提供単位の原価</span><span class="sum-val sv-accent" id="skcalc-result" style="font-size:22px">—</span></div>
+    </div>
+    <div class="m-foot">
+      <button class="btn btn-p" onclick="applySakeCalc()">仕入単価欄に反映する</button>
     </div>
   </div>
 </div>
@@ -1619,6 +1657,55 @@ function recalcSakeModal(){
   const tanRate = (tanPrice>0 && cost>0) ? cost/tanPrice : null;
   document.getElementById('sk-calc-nomi').textContent = pct(nomiRate);
   document.getElementById('sk-calc-tan').textContent = pct(tanRate);
+}
+
+// ---- 本単価（1本あたりの仕入単価）から、一合／グラス等の提供単位あたり原価を計算 ----
+function openSakeCalc(){
+  document.getElementById('skcalc-vol').value = '';
+  document.getElementById('skcalc-price').value = '';
+  document.getElementById('skcalc-unit').value = '180';
+  document.getElementById('skcalc-custom-ml').value = '';
+  document.getElementById('skcalc-custom-wrap').style.display = 'none';
+  recalcSakeCalc();
+  document.getElementById('skcalc-overlay').classList.add('open');
+}
+function onSakeCalcUnitChange(){
+  const isCustom = document.getElementById('skcalc-unit').value === 'custom';
+  document.getElementById('skcalc-custom-wrap').style.display = isCustom ? '' : 'none';
+  recalcSakeCalc();
+}
+function sakeCalcServingMl(){
+  const unit = document.getElementById('skcalc-unit').value;
+  if(unit === 'custom') return num(document.getElementById('skcalc-custom-ml').value);
+  return num(unit);
+}
+function recalcSakeCalc(){
+  const vol = num(document.getElementById('skcalc-vol').value);
+  const price = num(document.getElementById('skcalc-price').value);
+  const serving = sakeCalcServingMl();
+  const perMl = vol>0 ? price/vol : 0;
+  document.getElementById('skcalc-per-ml').textContent = perMl>0 ? '¥'+perMl.toFixed(3)+' / ml' : '—';
+  const result = (perMl>0 && serving>0) ? perMl*serving : 0;
+  document.getElementById('skcalc-result').textContent = result>0 ? yenU(result) : '—';
+}
+function applySakeCalc(){
+  const vol = num(document.getElementById('skcalc-vol').value);
+  const price = num(document.getElementById('skcalc-price').value);
+  const serving = sakeCalcServingMl();
+  if(!(vol>0)){ toast('❌ 容量（ml）を入力してください'); return; }
+  if(!(price>0)){ toast('❌ 1本の仕入単価を入力してください'); return; }
+  if(!(serving>0)){ toast('❌ 提供量（ml）を入力してください'); return; }
+  const result = Math.round((price/vol)*serving*100)/100; // 小数点以下2桁で丸め
+  document.getElementById('sk-purchase').value = result;
+  // 提供形態欄が空なら、選んだ単位から分かりやすい初期値を入れておく（既に入力済みなら上書きしない）
+  const unit = document.getElementById('skcalc-unit').value;
+  const formEl = document.getElementById('sk-form');
+  if(!formEl.value.trim()){
+    formEl.value = unit==='180' ? '一合' : unit==='90' ? 'グラス' : (serving+'ml');
+  }
+  recalcSakeModal();
+  closeModal('skcalc-overlay');
+  toast(`✅ ${yenU(result)} を仕入単価に反映しました`);
 }
 
 async function saveSakeBrand(){
