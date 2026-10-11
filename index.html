@@ -877,7 +877,15 @@ function renderMenuTable(list, q){
     const rb=(b.price>0&&b.calcCost>0)?b.calcCost/b.price:-1;
     return rb-ra;
   });
-  wrap.innerHTML = `<table class="rtable"><thead><tr>
+  // 平均原価率（売価・原価がともに算出できている商品のみが対象。表示中の絞込み・検索結果に対して算出）
+  const rates=list.map(m=>(m.price>0&&m.calcCost>0)?m.calcCost/m.price:null).filter(r=>r!=null);
+  const avg=rates.length?rates.reduce((s,r)=>s+r,0)/rates.length:null;
+  const avgRc=(avg==null)?'':(avg<=0.30?'sv-safe':avg<=0.38?'sv-warn':'sv-danger');
+  const avgBar=`<div class="sum-row" style="padding:11px 16px;margin-bottom:0">
+      <span class="sum-lbl">平均原価率（算出可能 ${rates.length}/${list.length}品）</span>
+      <span class="sum-val ${avgRc}" style="font-size:19px">${avg!=null?pct(avg):'—'}</span>
+    </div>`;
+  wrap.innerHTML = avgBar + `<table class="rtable"><thead><tr>
       <th>商品名</th><th>区分</th><th>売価</th><th>原価</th><th>原価率</th>
     </tr></thead><tbody>${sorted.map(m=>{
       const r=(m.price>0&&m.calcCost>0)?m.calcCost/m.price:null;
@@ -1715,7 +1723,15 @@ function renderSakeTable(list){
   if(!list.length){ wrap.innerHTML=empty('🍶','銘柄がまだありません','右下の ＋ で追加'); return; }
   // 単品原価率が高い順（＝要注意な銘柄が上）に並べる。未算出は末尾に回す
   const sorted=[...list].sort((a,b)=>(b.tanRate??-1)-(a.tanRate??-1));
-  wrap.innerHTML = `<table class="rtable"><thead><tr>
+  // 平均単品原価率（単品原価率が算出できている銘柄のみが対象。表示中の絞込み結果に対して算出）
+  const rates=list.map(b=>b.tanRate).filter(r=>r!=null&&r!==undefined);
+  const avg=rates.length?rates.reduce((s,r)=>s+r,0)/rates.length:null;
+  const avgRc=(avg==null)?'':(avg<=(SK.cfg.targetRateTan||0.30)?'sv-safe':avg<=(SK.cfg.targetRateTan||0.30)+0.08?'sv-warn':'sv-danger');
+  const avgBar=`<div class="sum-row" style="padding:11px 16px;margin-bottom:0">
+      <span class="sum-lbl">平均単品原価率（算出可能 ${rates.length}/${list.length}銘柄）</span>
+      <span class="sum-val ${avgRc}" style="font-size:19px">${avg!=null?pct(avg):'—'}</span>
+    </div>`;
+  wrap.innerHTML = avgBar + `<table class="rtable"><thead><tr>
       <th>銘柄名</th><th>提供形態</th><th>単品売価</th><th>原価</th><th>単品原価率</th>
     </tr></thead><tbody>${sorted.map(b=>{
       const r=b.tanRate;
